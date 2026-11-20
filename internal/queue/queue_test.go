@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/prompt"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/prompt"
 )
 
 func item(s string) Item { return Item{Prompt: prompt.Prompt{Instruction: s}, Label: s} }

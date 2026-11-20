@@ -15,13 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/prompt"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/queue"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/route"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/screen"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/state"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/tmux"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/prompt"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/queue"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/route"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/screen"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/state"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/tmux"
 )
 
 // SessionEnv tells the hook which relay session it runs in.

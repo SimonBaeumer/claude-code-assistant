@@ -1,4 +1,4 @@
-module github.com/SimonBaeumer/claude-code-assistent
+module github.com/SimonBaeumer/claude-code-assistant
 
 go 1.22
 

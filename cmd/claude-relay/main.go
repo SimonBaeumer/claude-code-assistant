@@ -14,15 +14,15 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/desktop"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/envpath"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/jetbrains"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/queue"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/relay"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/route"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/state"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/tmux"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/desktop"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/envpath"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/jetbrains"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/queue"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/relay"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/route"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/state"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/tmux"
 )
 
 const usage = `claude-relay: send IDE selections into persistent Claude Code sessions

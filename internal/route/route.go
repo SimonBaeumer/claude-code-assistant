@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
 )
 
 // Prefix marks every tmux session owned by claude-relay.

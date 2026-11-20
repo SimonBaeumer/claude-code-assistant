@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/prompt"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/route"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/prompt"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/route"
 )
 
 // sendOpts are the parsed flags of "send".

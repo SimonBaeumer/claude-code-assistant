@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
 )
 
 // Prompt is what gets delivered: Instruction is typed as one line, Body is pasted.

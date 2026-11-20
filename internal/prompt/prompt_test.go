@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
 )
 
 func TestReadLines(t *testing.T) {

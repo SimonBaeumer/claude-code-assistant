@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/prompt"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/prompt"
 )
 
 var ErrFull = errors.New("queue is full")

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/desktop"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/route"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/desktop"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/route"
 )
 
 const src = "package main\n\nfunc a() {}\n\nfunc b() {\n\tprintln(\"b\")\n}\n"

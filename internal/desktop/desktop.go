@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/state"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/tmux"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/config"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/state"
+	"github.com/SimonBaeumer/claude-code-assistant/internal/tmux"
 )
 
 // Notify shows a short desktop notification. Never pass prompt or code content here:
