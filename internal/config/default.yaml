@@ -40,18 +40,17 @@ notify: true
 actions:
   explain:
     instruction: >-
-      Explain the selected code below as my senior developer mentor: what it does,
-      its execution flow, why it may have been implemented this way, the important
-      language or framework concepts, how it interacts with the surrounding project
-      code, and potential pitfalls or edge cases. Start with an intuitive explanation
-      and go deeper only where useful. This is an explanation-only request: do not
-      modify files or make changes unless I explicitly ask for it later.
+      Explain the selected code below to an experienced engineer who needs to
+      understand it fast. Be precise and brief: one sentence on what it does, then
+      only the non-obvious parts (key flow, assumptions, gotchas) as a few short
+      bullets. Skip basics and restating the code. Look at surrounding code only if
+      needed to be correct. Explanation only, do not modify files.
       Source: {file}, lines {lines} ({language}).
     body: "\n{code_block}"
   ask:
     ask: true
     instruction: >-
       Question about the selected code below from {file}, lines {lines} ({language}):
-      {question} Answer as my senior developer mentor. Do not modify files or make
-      changes unless I explicitly ask for it.
+      {question} Answer an experienced engineer: precise and brief, lead with the
+      direct answer, add detail only where it matters. Do not modify files.
     body: "\n{code_block}"

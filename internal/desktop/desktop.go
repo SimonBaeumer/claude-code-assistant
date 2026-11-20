@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/SimonBaeumer/claude-code-assistent/internal/config"
 	"github.com/SimonBaeumer/claude-code-assistent/internal/state"
@@ -28,17 +29,30 @@ func Notify(enabled bool, title, body string) {
 // ErrCancelled means the user closed the question dialog.
 var ErrCancelled = errors.New("cancelled")
 
-// Ask shows a single-line input dialog (kdialog, falling back to zenity).
+// Ask shows a single-line input dialog (kdialog, falling back to zenity). The dialog is
+// attached to the active window (the IDE) and raised, because KWin's focus stealing
+// prevention otherwise opens it behind the IDE when it is started from a background process.
 func Ask(label string) (string, error) {
+	const title = "claude-relay"
+	parent := activeWindow()
 	var cmd *exec.Cmd
 	if _, err := exec.LookPath("kdialog"); err == nil {
-		cmd = exec.Command("kdialog", "--title", "claude-relay", "--inputbox", label)
+		args := []string{"--title", title}
+		if parent != "" {
+			args = append(args, "--attach", parent)
+		}
+		cmd = exec.Command("kdialog", append(args, "--inputbox", label)...)
 	} else if _, err := exec.LookPath("zenity"); err == nil {
-		cmd = exec.Command("zenity", "--entry", "--title", "claude-relay", "--text", label)
+		cmd = exec.Command("zenity", "--entry", "--title", title, "--text", label)
 	} else {
 		return "", errors.New("neither kdialog nor zenity is installed")
 	}
-	out, err := cmd.Output()
+	cmd.Stdout = &strings.Builder{}
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	go raise(cmd.Process.Pid)
+	err := cmd.Wait()
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
@@ -46,11 +60,32 @@ func Ask(label string) (string, error) {
 		}
 		return "", err
 	}
-	q := strings.TrimSpace(string(out))
+	q := strings.TrimSpace(cmd.Stdout.(*strings.Builder).String())
 	if q == "" {
 		return "", ErrCancelled
 	}
 	return q, nil
+}
+
+// activeWindow returns the X11 id of the focused window, or "" without xdotool.
+func activeWindow() string {
+	out, err := exec.Command("xdotool", "getactivewindow").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// raise waits for the dialog's window to be mapped and activates it (best effort).
+func raise(pid int) {
+	for i := 0; i < 40; i++ {
+		out, err := exec.Command("xdotool", "search", "--onlyvisible", "--pid", strconv.Itoa(pid)).Output()
+		if ids := strings.Fields(string(out)); err == nil && len(ids) > 0 {
+			_ = exec.Command("xdotool", "windowactivate", ids[len(ids)-1]).Run()
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // Viewer is the single terminal window that shows whichever session got the last request.
