@@ -271,3 +271,39 @@ func TestShellPaneIsNotClaude(t *testing.T) {
 		t.Fatalf("want unknown for a shell pane, got %+v", st)
 	}
 }
+
+func TestInstructionOnlyPromptIsOneSubmitWithoutPaste(t *testing.T) {
+	e := setup(t, 200)
+	p := prompt.Prompt{Instruction: "Review main.go (whole file) (Go) for correctness."}
+	if out, err := e.r.Send(e.target, p, "review"); err != nil || out.Result != "sent" {
+		t.Fatalf("%+v %v", out, err)
+	}
+	waitFor(t, "one submit", func() bool { return len(submits(t, e.log)) >= 1 })
+	time.Sleep(300 * time.Millisecond)
+	if got := submits(t, e.log); len(got) != 1 || got[0].Text != p.Instruction {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestStaleCopyModeIsLeftAndPromptDeliveredOnce(t *testing.T) {
+	e := setup(t, 200)
+	st, err := e.r.Start(e.target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := exec.Command("tmux", append(e.r.T.BaseArgs(), "copy-mode", "-t", st.Pane)...).CombinedOutput(); err != nil {
+		t.Fatal(err)
+	}
+	if s := e.r.Status(e.target.Session); s.State != Attention || !strings.Contains(s.Reason, "copy-mode") {
+		t.Fatalf("a scrolled pane must not look idle: %+v", s)
+	}
+	p := prompt.Prompt{Instruction: "Explain the selected code that follows", Body: "\nfunc f() {}"}
+	if out, err := e.r.Send(e.target, p, "x"); err != nil || out.Result != "sent" {
+		t.Fatalf("detached scrolled session must be un-scrolled and sent: %+v %v", out, err)
+	}
+	waitFor(t, "one submit", func() bool { return len(submits(t, e.log)) >= 1 })
+	time.Sleep(300 * time.Millisecond)
+	if got := submits(t, e.log); len(got) != 1 || got[0].Text != p.Instruction+p.Body {
+		t.Fatalf("got %+v", got)
+	}
+}

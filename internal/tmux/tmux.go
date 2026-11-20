@@ -3,18 +3,21 @@ package tmux
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Tmux talks to one tmux server. Socket and Config are empty for the user's default server;
 // tests set them to get an isolated server.
 type Tmux struct {
-	Socket string // -L
-	Config string // -f
+	Timeout time.Duration // per tmux call; 0 means DefaultTimeout
+	Socket  string        // -L
+	Config  string        // -f
 }
 
 // BaseArgs are the global flags that select the server, for building attach commands.
@@ -29,12 +32,26 @@ func (t Tmux) BaseArgs() []string {
 	return a
 }
 
+// DefaultTimeout bounds every tmux call. A tmux client can block forever, e.g. when keys
+// sent into a pane in copy-mode open a prompt (jump-to-char) that no terminal can answer;
+// without a bound it would hold the session lock and wedge every later request.
+const DefaultTimeout = 10 * time.Second
+
 func (t Tmux) run(stdin io.Reader, args ...string) (string, error) {
-	c := exec.Command("tmux", append(t.BaseArgs(), args...)...)
+	timeout := t.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	c := exec.CommandContext(ctx, "tmux", append(t.BaseArgs(), args...)...)
 	c.Stdin = stdin
 	var out, errb bytes.Buffer
 	c.Stdout, c.Stderr = &out, &errb
 	if err := c.Run(); err != nil {
+		if ctx.Err() != nil {
+			return out.String(), fmt.Errorf("tmux %s: no answer within %s", args[0], timeout)
+		}
 		return out.String(), fmt.Errorf("tmux %s: %v: %s", args[0], err, strings.TrimSpace(errb.String()))
 	}
 	return out.String(), nil
@@ -75,17 +92,31 @@ func (t Tmux) Option(session, key string) string {
 	return strings.TrimSpace(out)
 }
 
-// PaneInfo returns the pane's foreground command and whether it is dead.
-func (t Tmux) PaneInfo(pane string) (cmd string, dead bool, err error) {
-	out, err := t.run(nil, "display-message", "-p", "-t", pane, "#{pane_dead} #{pane_current_command}")
+// PaneState is what the relay needs to know about a pane before reading or typing into it.
+type PaneState struct {
+	Command  string // foreground command
+	Dead     bool
+	InMode   bool // copy-mode or another tmux mode: keys go to tmux, capture shows the mode's view
+	Attached bool // the pane's session is shown in some client (e.g. the viewer)
+}
+
+// PaneInfo returns the pane's foreground command, liveness, mode and whether it is being viewed.
+func (t Tmux) PaneInfo(pane string) (PaneState, error) {
+	out, err := t.run(nil, "display-message", "-p", "-t", pane, "#{pane_dead} #{pane_in_mode} #{session_attached} #{pane_current_command}")
 	if err != nil {
-		return "", false, err
+		return PaneState{}, err
 	}
-	parts := strings.SplitN(strings.TrimSpace(out), " ", 2)
-	if len(parts) != 2 {
-		return "", false, fmt.Errorf("unexpected pane info %q", out)
+	parts := strings.SplitN(strings.TrimSpace(out), " ", 4)
+	if len(parts) != 4 {
+		return PaneState{}, fmt.Errorf("unexpected pane info %q", out)
 	}
-	return parts[1], parts[0] == "1", nil
+	return PaneState{Command: parts[3], Dead: parts[0] == "1", InMode: parts[1] == "1", Attached: parts[2] != "0"}, nil
+}
+
+// ExitMode leaves copy-mode (or any other mode) in the pane.
+func (t Tmux) ExitMode(pane string) error {
+	_, err := t.run(nil, "copy-mode", "-q", "-t", pane)
+	return err
 }
 
 // Capture returns the visible pane content including SGR attributes.

@@ -89,16 +89,21 @@ func (r *Relay) Status(session string) Status {
 		return Status{State: Unknown, Reason: "tmux session " + session + " was not started by claude-relay"}
 	}
 	st := Status{Pane: pane}
-	cmd, dead, err := r.T.PaneInfo(pane)
+	ps, err := r.T.PaneInfo(pane)
 	switch {
 	case err != nil:
 		st.State, st.Reason = Unknown, err.Error()
 		return st
-	case dead:
+	case ps.Dead:
 		st.State, st.Reason = Unknown, "Claude has exited in "+session
 		return st
-	case shells[cmd]:
-		st.State, st.Reason = Unknown, "pane runs a shell ("+cmd+"), not Claude"
+	case shells[ps.Command]:
+		st.State, st.Reason = Unknown, "pane runs a shell ("+ps.Command+"), not Claude"
+		return st
+	case ps.InMode:
+		// The capture would show the scrolled-back view, not Claude's live screen, and typed
+		// keys would run copy-mode commands. Never read or type until the mode is left.
+		st.State, st.Reason = Attention, "the viewer is scrolled back (tmux copy-mode), press q in it to continue"
 		return st
 	}
 	raw, err := r.T.Capture(pane)
@@ -128,6 +133,19 @@ func (r *Relay) Status(session string) Status {
 	}
 	st.State = Idle
 	return st
+}
+
+// leaveStaleMode takes the pane out of copy-mode when nobody is looking at it. The viewer
+// switching away from a scrolled session leaves it in copy-mode; nobody will press q there.
+// A session that is on screen is left alone: the user may be reading.
+func (r *Relay) leaveStaleMode(session string) {
+	pane := r.T.Option(session, optPane)
+	if pane == "" {
+		return
+	}
+	if ps, err := r.T.PaneInfo(pane); err == nil && ps.InMode && !ps.Attached {
+		_ = r.T.ExitMode(pane)
+	}
 }
 
 // Start launches Claude for the target in a new detached tmux session (if none exists)
@@ -232,6 +250,7 @@ func (r *Relay) Send(t route.Target, p prompt.Prompt, label string) (Outcome, er
 	}
 	defer unlock()
 
+	r.leaveStaleMode(t.Session)
 	st := r.Status(t.Session)
 	sd, err := state.SessionDir(t.Session)
 	if err != nil {
@@ -320,6 +339,7 @@ func (r *Relay) drainLoop(q queue.Queue, session string, deadline time.Time, onD
 		if err != nil {
 			return delivered, err
 		}
+		r.leaveStaleMode(session)
 		st := r.Status(session)
 		if st.State == Idle {
 			ok, err := r.drainOneLocked(q, st.Pane, session)
@@ -374,6 +394,14 @@ func (r *Relay) deliver(pane, session string, p prompt.Prompt) (submitted bool, 
 			return false, err
 		}
 		defer r.T.DeleteBuffer(buf) // no-op after a successful paste -d
+	}
+	// The user may have entered copy-mode since the status check; keys would then run copy-mode
+	// commands instead of reaching Claude.
+	if ps, err := r.T.PaneInfo(pane); err != nil || ps.InMode {
+		if err == nil {
+			err = errors.New("the viewer was scrolled back (tmux copy-mode) right before typing")
+		}
+		return false, err
 	}
 	if err := r.T.SendLiteral(pane, instr); err != nil {
 		return false, fmt.Errorf("typing into Claude failed, check its input box: %w", err)
