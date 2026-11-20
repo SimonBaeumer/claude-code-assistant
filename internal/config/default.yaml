@@ -1,0 +1,57 @@
+# claude-relay configuration.
+# Every key is optional: anything you leave out falls back to these defaults.
+
+# The general session: used by the "general" shortcuts and for files outside any git repo.
+general:
+  session: general
+  dir: ~/claude-general
+
+# Route overrides. Longest matching path prefix wins, otherwise the file's git root
+# picks the session automatically.
+routes: []
+#  - path: ~/src/monorepo/service-a   # files under this path...
+#    session: service-a               # ...go to session "cr-service-a"
+#    dir: ~/src/monorepo/service-a    # working dir of that session (default: path)
+
+claude:
+  command: claude
+  args: []                 # extra flags, e.g. ["--model", "opus"]
+  resume: true             # restart a lost session with --resume <its last conversation>
+  startup_timeout_ms: 30000
+
+viewer:
+  terminal: [konsole, --separate, -e]   # command prefix; "tmux attach-session ..." is appended
+  open_if_missing: true                 # open a viewer window if none is running
+  focus: true                           # raise and focus the viewer after a send
+
+limits:
+  max_chars: 30000
+
+queue:
+  max_items: 5
+
+notify: true
+
+# Actions are prompt templates. "instruction" is typed into Claude Code as one line
+# (newlines become spaces, so it is never submitted early). "body" is pasted after it
+# with bracketed paste and may span many lines.
+#
+# Placeholders: {file} {abs_file} {lines} {language} {project} {question} {selection} {code_block}
+actions:
+  explain:
+    instruction: >-
+      Explain the selected code below as my senior developer mentor: what it does,
+      its execution flow, why it may have been implemented this way, the important
+      language or framework concepts, how it interacts with the surrounding project
+      code, and potential pitfalls or edge cases. Start with an intuitive explanation
+      and go deeper only where useful. This is an explanation-only request: do not
+      modify files or make changes unless I explicitly ask for it later.
+      Source: {file}, lines {lines} ({language}).
+    body: "\n{code_block}"
+  ask:
+    ask: true
+    instruction: >-
+      Question about the selected code below from {file}, lines {lines} ({language}):
+      {question} Answer as my senior developer mentor. Do not modify files or make
+      changes unless I explicitly ask for it.
+    body: "\n{code_block}"

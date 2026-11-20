@@ -38,6 +38,8 @@ tmux send-keys -t relay-poc Enter
 
 Result: one turn, **no `<pasted_content>` wrapper**, and the code was inlined into the prompt string. Side effect observed: a leading tab in the code arrived as 4 spaces. That is cosmetic for explanation but means byte-exact code is not guaranteed.
 
+**Correction from the end-to-end run with the implementation:** for larger bodies (15+ lines) the pasted part *is* wrapped, but only the paste: the prompt reads `<typed instruction>\n\n<pasted_content id=...>\n<code>\n</pasted_content>`. The typed instruction stays outside the tag, which is the intended split (the user's words vs. pasted material).
+
 ### F4. Sending while busy, without tools: Claude Code queues natively
 
 A second message sent while a plain text answer was streaming showed up above the input box and was submitted after the first turn's `Stop`, as a separate turn. Event order: `UserPromptSubmit, Stop, UserPromptSubmit, Stop`.
