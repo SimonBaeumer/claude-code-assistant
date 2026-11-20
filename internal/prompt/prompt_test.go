@@ -89,3 +89,15 @@ func TestLanguage(t *testing.T) {
 		t.Fatal(n)
 	}
 }
+
+func TestRenderTargetAndWholeFile(t *testing.T) {
+	a := config.Action{Instruction: "Review {target} ({language}), lines {lines}.", Body: "\n{code_block}"}
+	p, err := Render(a, Input{File: "/repo/a.go", RouteDir: "/repo", Lines: "3-5", Selection: "x := 1"})
+	if err != nil || p.Instruction != "Review a.go, lines 3-5 (Go), lines 3-5." || p.Body == "" {
+		t.Fatalf("selection: %+v %v", p, err)
+	}
+	p, err = Render(a, Input{File: "/repo/a.go", RouteDir: "/repo", Selection: "ignored", WholeFile: true})
+	if err != nil || p.Instruction != "Review a.go (whole file) (Go), lines all." || p.Body != "" {
+		t.Fatalf("whole file: %+v %v", p, err)
+	}
+}

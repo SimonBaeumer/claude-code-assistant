@@ -36,7 +36,16 @@ notify: true
 # (newlines become spaces, so it is never submitted early). "body" is pasted after it
 # with bracketed paste and may span many lines.
 #
-# Placeholders: {file} {abs_file} {lines} {language} {project} {question} {selection} {code_block}
+# Placeholders: {file} {abs_file} {lines} {target} {language} {project} {question}
+# {selection} {code_block}. {target} is "main.go, lines 3-5" or "main.go (whole file)".
+#
+# Optional per action:
+#   ask: true            show a dialog first, its text fills {question}
+#   ask_label: "..."     the dialog text
+#   no_selection: caret  what to send with nothing selected: caret (the caret line),
+#                        file (name the whole file, Claude reads it), error
+#   route: repo          refuse the general session (any is the default)
+#   needs_file: false    the action works without a file or selection
 actions:
   explain:
     instruction: >-
@@ -53,4 +62,45 @@ actions:
       Question about the selected code below from {file}, lines {lines} ({language}):
       {question} Answer an experienced engineer: precise and brief, lead with the
       direct answer, add detail only where it matters. Do not modify files.
+    body: "\n{code_block}"
+  review:
+    no_selection: file
+    route: repo
+    instruction: >-
+      Review the code below from {target} ({language}) for correctness, best
+      practices and security, as a senior engineer would in a code review. Report
+      at most 10 findings, most severe first. For each: severity (critical, high,
+      medium, low), file:line, the problem in one sentence, why it matters, and the
+      concrete fix in one or two lines. Check in particular input validation and
+      injection, authn/authz, secrets in code, unsafe deserialization, path
+      traversal, error handling, resource leaks, concurrency, and non-idiomatic
+      patterns for this language. Skip pure style nits. If there is nothing
+      significant, say so in one line. Read the surrounding code where needed to be
+      sure. Review only, do not modify files; I may ask you to fix a finding later.
+    body: "\n{code_block}"
+  review-changes:
+    needs_file: false
+    route: repo
+    instruction: >-
+      Review the uncommitted changes in this repo (run git diff HEAD and git status,
+      and read new untracked files) for correctness, best practices and security, as
+      a senior engineer would in a code review. Report at most 10 findings, most
+      severe first. For each: severity (critical, high, medium, low), file:line, the
+      problem in one sentence, why it matters, and the concrete fix in one or two
+      lines. Check in particular input validation and injection, authn/authz,
+      secrets, unsafe deserialization, path traversal, error handling, resource
+      leaks, concurrency, and non-idiomatic patterns. Skip pure style nits. If there
+      is nothing significant, say so in one line. Review only, do not modify files;
+      I may ask you to fix a finding later.
+    body: ""
+  edit:
+    ask: true
+    ask_label: "Describe the change:"
+    route: repo
+    instruction: >-
+      Change the code below in {target} ({language}) as follows: {question}
+      Edit the file directly. Keep the change minimal and limited to this code
+      unless the request needs more, follow the file's existing style, and do not
+      touch unrelated code. The code is shown to locate it; find it by content, not
+      by line number. When done, summarise what you changed in two or three lines.
     body: "\n{code_block}"

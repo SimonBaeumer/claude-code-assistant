@@ -86,3 +86,36 @@ func TestValidationErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestNewActionFields(t *testing.T) {
+	cfg, err := Load(write(t, "actions:\n  review:\n    instruction: Shorter review of {target}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := cfg.Actions["review"]
+	if r.NoSelection != NoSelectionFile || r.Route != RouteRepo || r.Body != "\n{code_block}" {
+		t.Fatalf("override must inherit unset fields: %+v", r)
+	}
+	rc := cfg.Actions["review-changes"]
+	if rc.RequiresFile() || rc.Body != "" {
+		t.Fatalf("review-changes: %+v", rc)
+	}
+	if e := cfg.Actions["edit"]; !e.Ask || e.Label() != "Describe the change:" {
+		t.Fatalf("edit: %+v", e)
+	}
+	if l := cfg.Actions["ask"].Label(); l != "Question about the selection:" {
+		t.Fatalf("default label %q", l)
+	}
+}
+
+func TestNewActionFieldsValidation(t *testing.T) {
+	for name, y := range map[string]string{
+		"bad no_selection": "actions:\n  x:\n    instruction: hi\n    no_selection: all\n",
+		"bad route":        "actions:\n  x:\n    instruction: hi\n    route: general\n",
+		"no file but file": "actions:\n  x:\n    instruction: hi {file}\n    needs_file: false\n",
+	} {
+		if _, err := Load(write(t, y)); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

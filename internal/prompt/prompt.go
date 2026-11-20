@@ -31,6 +31,7 @@ type Input struct {
 	Lines     string // "12-30", "7" or ""
 	Selection string
 	Question  string
+	WholeFile bool // nothing selected: name the file instead of pasting code
 }
 
 // ReadLines returns lines start..end (1-based, inclusive) of file.
@@ -72,20 +73,32 @@ func Render(a config.Action, in Input) (Prompt, error) {
 	if lines == "" {
 		lines = "?"
 	}
+	target := file + ", lines " + lines
+	if in.WholeFile {
+		lines, target = "all", file+" (whole file)"
+	}
 	sel := SanitizeBody(in.Selection)
+	codeBlock := CodeBlock(sel, langTag)
+	if in.WholeFile {
+		sel, codeBlock = "", ""
+	}
 	r := strings.NewReplacer(
 		"{file}", file,
 		"{abs_file}", in.File,
 		"{lines}", lines,
+		"{target}", target,
 		"{language}", langName,
 		"{project}", in.Project,
 		"{question}", in.Question,
 		"{selection}", sel,
-		"{code_block}", CodeBlock(sel, langTag),
+		"{code_block}", codeBlock,
 	)
 	p := Prompt{
 		Instruction: SanitizeLine(r.Replace(a.Instruction)),
 		Body:        SanitizeBody(r.Replace(a.Body)),
+	}
+	if strings.TrimSpace(p.Body) == "" {
+		p.Body = "" // nothing to paste (whole file, or an action without code)
 	}
 	if p.Instruction == "" {
 		return p, fmt.Errorf("rendered instruction is empty")

@@ -22,6 +22,9 @@ Then restart the IDE and bind shortcuts in **Settings > Keymap > External Tools 
 | Ask about selection | Alt+Q |
 | Explain selection (general) | Alt+Shift+E |
 | Ask about selection (general) | Alt+Shift+Q |
+| Review selection or file | Alt+R |
+| Review uncommitted changes | Alt+Shift+R |
+| Edit selection | Alt+I |
 
 Requirements: `tmux`, `claude`, `git`, `notify-send`, `kdialog` (or `zenity`) for Ask, and `xdotool` to raise the viewer.
 
@@ -39,6 +42,19 @@ claude-relay send --text "..." [--general] [--file F]   # from scripts or other 
 claude-relay config init|check|path
 ```
 
+### Review
+
+**Review selection or file** checks the selection for correctness, best practices and security. With nothing selected it reviews the whole file: Claude reads it from disk, so there is no size limit. **Review uncommitted changes** has Claude run `git diff HEAD` and `git status` itself. Both report at most 10 findings, most severe first, each with file:line and a concrete fix, and never modify files. To apply one, type `fix 2` in the viewer or use Edit.
+
+### Edit
+
+Select code (or put the caret on a line), press **Edit selection**, describe the change and press Enter. The dialog has focus, so you can also dictate with a speech to text tool that types into the focused field (e.g. Handy). Claude edits the file in place and summarises the change; the IDE reloads it from disk. If the session is not in auto mode, approve the edit in the viewer.
+
+- The selected code is sent along so Claude finds it by content. If the file changed while the request was queued, the edit fails visibly instead of hitting the wrong lines.
+- Don't keep typing in the same file while Claude edits it, or the IDE shows a "file changed on disk" conflict.
+
+Review and Edit run only in a repo session, never the general one.
+
 Closing the viewer only detaches it: the Claude sessions keep running. You can also attach yourself with `tmux attach -t cr-<name>`.
 
 ## Configure
@@ -54,12 +70,13 @@ routes:                          # optional; default is one session per git root
 claude:
   args: ["--model", "opus"]      # extra flags for every relay-started claude
 actions:                         # prompt templates; add your own
-  review:
-    instruction: "Review this code from {file}, lines {lines}, for bugs. Do not edit files."
-    body: "\n{code_block}"
+  explain:
+    instruction: "Explain {target} ({language}) in three bullets. Do not edit files."
 ```
 
-Run a custom action from an External Tool with `send --action review ...`. Placeholders: `{file} {abs_file} {lines} {language} {project} {question} {selection} {code_block}`.
+Run a custom action from an External Tool with `send --action <name> ...`. Placeholders: `{file} {abs_file} {lines} {target} {language} {project} {question} {selection} {code_block}`, where `{target}` is `main.go, lines 3-5` or `main.go (whole file)`.
+
+Per action you can also set `ask: true` and `ask_label` (show a dialog), `no_selection: caret|file|error` (what to send when nothing is selected), `route: repo` (refuse the general session) and `needs_file: false` (no file or selection needed). An action you override keeps the built-in values for the keys you leave out.
 
 ## How it works
 
@@ -83,7 +100,8 @@ The research behind these choices, including a live test against the real TUI, i
 
 The IDE passes `$FilePath$` and the selected line range, and the relay reads those lines from the file. This avoids quoting problems with `$SelectedText$`, but it means:
 
-- the selection is widened to whole lines, and with no selection the caret line is sent;
+- the selection is widened to whole lines;
+- with no selection, Explain, Ask and Edit send the caret line, Review the whole file;
 - the file content on disk is used. JetBrains IDEs save documents before running an External Tool, but if you see stale code, check autosave.
 
 ## Troubleshooting
@@ -95,6 +113,7 @@ The IDE passes `$FilePath$` and the selected line range, and the relay reads tho
 | "+N stuck in flight" in status | A delivery crashed midway. Check the viewer and `queue clear` the session. |
 | "did not visibly pick it up" | Enter was pressed but no busy state appeared. Look at the viewer; the prompt is never resent. |
 | Viewer does not come to front | KDE focus-stealing prevention. Set `viewer.focus: false` and raise it yourself, or lower the prevention level for Konsole. |
+| "the viewer is scrolled back (tmux copy-mode)" | You scrolled the viewer with tmux copy-mode (e.g. Ctrl+B then `[`). Press `q` in it and the queued request goes out. Scrolled sessions that are not on screen are left automatically. |
 | Hand-started `claude` sessions | Not managed. Start sessions with `claude-relay start` so they get the hooks. |
 
 ## Development

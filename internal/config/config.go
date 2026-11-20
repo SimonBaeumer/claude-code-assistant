@@ -66,10 +66,37 @@ type Action struct {
 	Instruction string `yaml:"instruction"`
 	Body        string `yaml:"body"`
 	Ask         bool   `yaml:"ask"`
+	AskLabel    string `yaml:"ask_label"`    // dialog text, default "Question about the selection:"
+	NoSelection string `yaml:"no_selection"` // caret (default) | file | error
+	Route       string `yaml:"route"`        // any (default) | repo: refuse the general session
+	NeedsFile   *bool  `yaml:"needs_file"`   // default true; false: works without a file or selection
 }
 
+// No-selection behaviours and route constraints of an Action.
+const (
+	NoSelectionCaret = "caret" // send the caret line
+	NoSelectionFile  = "file"  // name the whole file, Claude reads it
+	NoSelectionError = "error" // refuse
+	RouteAny         = "any"
+	RouteRepo        = "repo"
+)
+
+// RequiresFile reports whether the action needs a source file (default true).
+func (a Action) RequiresFile() bool { return a.NeedsFile == nil || *a.NeedsFile }
+
+// Label is the question dialog text.
+func (a Action) Label() string {
+	if a.AskLabel != "" {
+		return a.AskLabel
+	}
+	return "Question about the selection:"
+}
+
+// fileOnly are the placeholders that only make sense with a source file.
+var fileOnly = []string{"file", "abs_file", "lines", "target", "selection", "code_block"}
+
 // Placeholders lists every template placeholder an action may use.
-var Placeholders = []string{"file", "abs_file", "lines", "language", "project", "question", "selection", "code_block"}
+var Placeholders = []string{"file", "abs_file", "lines", "language", "project", "question", "selection", "code_block", "target"}
 
 var (
 	sessionNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -94,9 +121,9 @@ func Load(path string) (*Config, error) {
 	if err := decode(DefaultYAML, cfg); err != nil {
 		return nil, fmt.Errorf("built-in defaults: %w", err)
 	}
-	defaultBodies := map[string]string{}
+	defaults := map[string]Action{}
 	for name, a := range cfg.Actions {
-		defaultBodies[name] = a.Body
+		defaults[name] = a
 	}
 
 	data, err := os.ReadFile(path)
@@ -110,16 +137,31 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
-	// An overridden action that leaves out "body" keeps the default code block.
+	// An overridden action inherits the fields it leaves out from the built-in action of the
+	// same name (yaml replaces map values whole). A new action without a body pastes the code.
 	for name, a := range cfg.Actions {
-		if a.Body == "" {
-			if b, ok := defaultBodies[name]; ok {
-				a.Body = b
-			} else {
-				a.Body = "\n{code_block}"
+		d, isDefault := defaults[name]
+		if isDefault {
+			if a.NeedsFile == nil {
+				a.NeedsFile = d.NeedsFile
 			}
-			cfg.Actions[name] = a
+			if a.AskLabel == "" {
+				a.AskLabel = d.AskLabel
+			}
+			if a.NoSelection == "" {
+				a.NoSelection = d.NoSelection
+			}
+			if a.Route == "" {
+				a.Route = d.Route
+			}
 		}
+		if a.Body == "" && a.RequiresFile() {
+			a.Body = "\n{code_block}"
+			if isDefault {
+				a.Body = d.Body
+			}
+		}
+		cfg.Actions[name] = a
 	}
 
 	cfg.General.Dir = ExpandHome(cfg.General.Dir)
@@ -206,6 +248,23 @@ func (c *Config) Validate() error {
 		}
 		if strings.Contains(a.Instruction, "{question}") && !a.Ask {
 			add("actions.%s: uses {question} but ask is false", name)
+		}
+		switch a.NoSelection {
+		case "", NoSelectionCaret, NoSelectionFile, NoSelectionError:
+		default:
+			add("actions.%s.no_selection: %q must be caret, file or error", name, a.NoSelection)
+		}
+		switch a.Route {
+		case "", RouteAny, RouteRepo:
+		default:
+			add("actions.%s.route: %q must be any or repo", name, a.Route)
+		}
+		if !a.RequiresFile() {
+			for _, ph := range fileOnly {
+				if strings.Contains(a.Instruction+a.Body, "{"+ph+"}") {
+					add("actions.%s: needs_file is false but uses {%s}", name, ph)
+				}
+			}
 		}
 	}
 	if len(errs) > 0 {

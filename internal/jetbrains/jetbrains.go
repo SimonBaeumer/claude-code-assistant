@@ -18,11 +18,14 @@ var tools = []tool{
 	{"Ask about selection", "Ask a question about the selection in this repo's Claude session", "--action ask"},
 	{"Explain selection (general)", "Explain the selection in the general Claude session", "--action explain --general"},
 	{"Ask about selection (general)", "Ask about the selection in the general Claude session", "--action ask --general"},
+	{"Review selection or file", "Review the selection (or the whole file) for best practices and security", "--action review"},
+	{"Review uncommitted changes", "Review the repo's uncommitted changes for best practices and security", "--action review-changes"},
+	{"Edit selection", "Describe a change (type or dictate) and let Claude edit the selected code", "--action edit"},
 }
 
 // Context passed from the IDE. The selection is read from the saved file by line range
 // instead of $SelectedText$, so code containing quotes cannot break argument parsing.
-const ideArgs = `--file "$FilePath$" --start=$SelectionStartLine$ --end=$SelectionEndLine$ --line=$LineNumber$ --project "$ProjectFileDir$"`
+const ideArgs = `--file "$FilePath$" --start=$SelectionStartLine$ --end=$SelectionEndLine$ --start-col=$SelectionStartColumn$ --end-col=$SelectionEndColumn$ --line=$LineNumber$ --project "$ProjectFileDir$"`
 
 func attr(s string) string {
 	var b bytes.Buffer

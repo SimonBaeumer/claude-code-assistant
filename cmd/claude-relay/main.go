@@ -18,7 +18,6 @@ import (
 	"github.com/SimonBaeumer/claude-code-assistent/internal/desktop"
 	"github.com/SimonBaeumer/claude-code-assistent/internal/envpath"
 	"github.com/SimonBaeumer/claude-code-assistent/internal/jetbrains"
-	"github.com/SimonBaeumer/claude-code-assistent/internal/prompt"
 	"github.com/SimonBaeumer/claude-code-assistent/internal/queue"
 	"github.com/SimonBaeumer/claude-code-assistent/internal/relay"
 	"github.com/SimonBaeumer/claude-code-assistent/internal/route"
@@ -111,16 +110,19 @@ func fail(cfg *config.Config, title string, err error) int {
 
 func cmdSend(args []string) int {
 	fs := flag.NewFlagSet("send", flag.ContinueOnError)
-	action := fs.String("action", "explain", "action (prompt template) name")
-	general := fs.Bool("general", false, "send to the general session")
-	file := fs.String("file", "", "source file")
-	start := fs.String("start", "", "first selected line (1-based)")
-	end := fs.String("end", "", "last selected line")
-	line := fs.String("line", "", "caret line, used when there is no selection")
-	project := fs.String("project", "", "project root (routing fallback)")
-	text := fs.String("text", "", "selection text instead of reading --file")
+	var o sendOpts
+	fs.StringVar(&o.Action, "action", "explain", "action (prompt template) name")
+	fs.BoolVar(&o.General, "general", false, "send to the general session")
+	fs.StringVar(&o.File, "file", "", "source file")
+	fs.StringVar(&o.Start, "start", "", "first selected line (1-based)")
+	fs.StringVar(&o.End, "end", "", "last selected line")
+	fs.StringVar(&o.Line, "line", "", "caret line, used when there is no selection")
+	fs.StringVar(&o.StartCol, "start-col", "", "selection start column; equal start and end line and column means nothing is selected")
+	fs.StringVar(&o.EndCol, "end-col", "", "selection end column")
+	fs.StringVar(&o.Project, "project", "", "project root (routing fallback)")
+	fs.StringVar(&o.Text, "text", "", "selection text instead of reading --file")
 	fromStdin := fs.Bool("stdin", false, "read the selection from stdin")
-	question := fs.String("question", "", "question for ask actions (skips the dialog)")
+	fs.StringVar(&o.Question, "question", "", "question for ask actions (skips the dialog)")
 	noView := fs.Bool("no-view", false, "do not switch or open the viewer")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -130,75 +132,27 @@ func cmdSend(args []string) int {
 	if err != nil {
 		return fail(nil, "claude-relay config error", err)
 	}
-	act, ok := cfg.Actions[*action]
-	if !ok {
-		return fail(cfg, "Unknown action", fmt.Errorf("no action %q in config", *action))
-	}
-
-	absFile := ""
-	if *file != "" {
-		absFile, _ = filepath.Abs(*file)
-	}
-	var sel, lines string
-	switch {
-	case *text != "":
-		sel = *text
-	case *fromStdin:
+	if *fromStdin {
 		data, err := io.ReadAll(io.LimitReader(os.Stdin, int64(cfg.Limits.MaxChars)*4+1))
 		if err != nil {
 			return fail(cfg, "Reading stdin failed", err)
 		}
-		sel = string(data)
-	case absFile != "":
-		s, e := atoi(*start), atoi(*end)
-		if s == 0 {
-			s = atoi(*line)
-			e = s
-		}
-		sel, err = prompt.ReadLines(absFile, s, e)
-		if err != nil {
-			return fail(cfg, "No selection", err)
-		}
-		if e > s {
-			lines = fmt.Sprintf("%d-%d", s, e)
-		} else {
-			lines = strconv.Itoa(s)
-		}
+		o.Stdin, o.HasStdin = string(data), true
 	}
-	if strings.TrimSpace(sel) == "" {
-		return fail(cfg, "No selection", errors.New("select some code first"))
+	req, err := buildSend(cfg, o, desktop.Ask)
+	if errors.Is(err, desktop.ErrCancelled) {
+		return 0
 	}
-
-	q := *question
-	if act.Ask && q == "" {
-		q, err = desktop.Ask("Question about the selection:")
-		if errors.Is(err, desktop.ErrCancelled) {
-			return 0
-		}
-		if err != nil {
-			return fail(cfg, "Question dialog failed", err)
-		}
+	var se sendError
+	if errors.As(err, &se) {
+		return fail(cfg, se.title, se.err)
 	}
-
-	target := route.Resolve(cfg, absFile, *project, *general)
-	p, err := prompt.Render(act, prompt.Input{
-		File: absFile, RouteDir: target.Dir, Project: *project, Lines: lines, Selection: sel, Question: q,
-	})
 	if err != nil {
-		return fail(cfg, "Prompt template error", err)
-	}
-	if n := p.Len(); n > cfg.Limits.MaxChars {
-		return fail(cfg, "Selection too large", fmt.Errorf("%d characters, the limit is %d (limits.max_chars)", n, cfg.Limits.MaxChars))
+		return fail(cfg, "Not sent", err)
 	}
 
-	label := *action
-	if absFile != "" {
-		label += " " + filepath.Base(absFile)
-		if lines != "" {
-			label += ":" + lines
-		}
-	}
-	out, err := rl.Send(target, p, label)
+	target := req.Target
+	out, err := rl.Send(target, req.Prompt, req.Label)
 	if !*noView && rl.Status(target.Session).State != relay.Missing {
 		if verr := (desktop.Viewer{Cfg: cfg.Viewer, T: rl.T}).Show(target.Session); verr != nil {
 			desktop.Notify(cfg.Notify, "Viewer failed", verr.Error())
@@ -213,7 +167,7 @@ func cmdSend(args []string) int {
 		if out.Started {
 			title = "Started and sent to " + target.Session
 		}
-		desktop.Notify(cfg.Notify, title, label)
+		desktop.Notify(cfg.Notify, title, req.Label)
 	case "queued":
 		desktop.Notify(cfg.Notify, fmt.Sprintf("Queued (#%d) for %s", out.Position, target.Session), out.Reason)
 	}
